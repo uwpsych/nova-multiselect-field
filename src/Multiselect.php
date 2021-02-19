@@ -85,7 +85,7 @@ class Multiselect extends Field
             return $value;
         });
 
-        return $this->withMeta(['apiUrl' => $path, 'labelKey' => $resourceClass::$title]);
+        return $this->withMeta(['apiUrl' => $path]);
     }
 
     public function asyncResource($resourceClass)
