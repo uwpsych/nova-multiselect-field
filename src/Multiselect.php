@@ -251,6 +251,8 @@ class Multiselect extends Field
      **/
     public function belongsToMany($resourceClass, $async = true)
     {
+        $this->resourceClass = $resourceClass;
+
         $this->resolveUsing(function ($value) use ($async, $resourceClass) {
             if ($async) $this->asyncResource($resourceClass);
 
@@ -292,6 +294,8 @@ class Multiselect extends Field
      **/
     public function belongsTo($resourceClass, $async = true)
     {
+        $this->resourceClass = $resourceClass;
+
         $this->singleSelect();
 
         $model = $resourceClass::$model;
