@@ -260,6 +260,10 @@ class Multiselect extends Field
 
             $this->setOptionsFromModels($models);
 
+            if ($value->isEmpty()) {
+                return null;
+            }
+
             return $value->map(function ($model) {
                 return $model[$model->getKeyName()];
             })->toArray();
