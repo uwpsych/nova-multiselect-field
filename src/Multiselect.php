@@ -14,7 +14,6 @@ class Multiselect extends Field
 
     protected $pageResponseResolveCallback;
     protected $saveAsJSON = false;
-    protected $resourceClass = null;
 
     /**
      * Sets the options available for select.
@@ -56,11 +55,10 @@ class Multiselect extends Field
 
     public function api($path, $resourceClass)
     {
-        $this->resourceClass = $resourceClass;
         if (empty($resourceClass)) throw new Exception('Multiselect requires resourceClass, none provided.');
         if (empty($path)) throw new Exception('Multiselect requires apiUrl, none provided.');
 
-        $this->resolveUsing(function ($value) {
+        $this->resolveUsing(function ($value) use ($resourceClass) {
             $this->options([]);
             $value = array_values((array)$value);
 
@@ -72,10 +70,10 @@ class Multiselect extends Field
             }
 
             try {
-                $modelObj = (new $this->resourceClass::$model);
-                $models = $this->resourceClass::$model::whereIn($modelObj->getKeyName(), $value)->get();
+                $modelObj = $resourceClass::newModel();
+                $models = $modelObj::whereIn($modelObj->getKeyName(), $value)->get();
 
-                $this->setOptionsFromModels($models);
+                $this->setOptionsFromModels($models, $resourceClass);
             } catch (Exception $e) {
             }
 
@@ -87,7 +85,6 @@ class Multiselect extends Field
 
     public function asyncResource($resourceClass)
     {
-        $this->resourceClass = $resourceClass;
         $apiUrl = "/nova-api/{$resourceClass::uriKey()}";
         return $this->api($apiUrl, $resourceClass);
     }
@@ -110,7 +107,8 @@ class Multiselect extends Field
         if ($singleSelect) {
             $model->{$attribute} = $value;
         } else {
-            $model->{$attribute} = $this->saveAsJSON || is_null($value) ? $value : json_encode($value);
+            $value = is_null($value) ? ($this->nullable ? $value : $value = []) : $value;
+            $model->{$attribute} = ($this->saveAsJSON || is_null($value)) ? $value : json_encode($value);
         }
     }
 
@@ -256,13 +254,9 @@ class Multiselect extends Field
         $this->resolveUsing(function ($value) use ($async, $resourceClass) {
             if ($async) $this->asyncResource($resourceClass);
 
-            $models = $async ? $value : $resourceClass::$model::all();
+            $models = $async ? $value : $resourceClass::newModel()::all();
 
-            $this->setOptionsFromModels($models);
-
-            if ($value->isEmpty()) {
-                return null;
-            }
+            $this->setOptionsFromModels($models, $resourceClass);
 
             return $value->map(function ($model) {
                 return $model[$model->getKeyName()];
@@ -301,18 +295,16 @@ class Multiselect extends Field
         $this->resourceClass = $resourceClass;
 
         $this->singleSelect();
-
-        $model = $resourceClass::$model;
-        $primaryKey = (new $model)->getKeyName();
+        $primaryKey =  $resourceClass::newModel()->getKeyName();
 
         $this->resolveUsing(function ($value) use ($async, $primaryKey, $resourceClass) {
-            $value = $value->{$primaryKey} ?? null;
             if ($async) $this->asyncResource($resourceClass);
 
-            $model = $resourceClass::$model;
+            $value = $value->{$primaryKey} ?? null;
+            $model = $resourceClass::newModel();
             $models = $async && isset($value) ? collect([$model::find($value)]) : $model::all();
 
-            $this->setOptionsFromModels($models);
+            $this->setOptionsFromModels($models, $resourceClass);
 
             return $value;
         });
@@ -332,7 +324,7 @@ class Multiselect extends Field
             }
 
             // Sync
-            $relation->associate($resourceClass::$model::find($request->get($attribute)));
+            $relation->associate($resourceClass::newModel()::find($request->get($attribute)));
         });
 
         return $this;
@@ -347,11 +339,12 @@ class Multiselect extends Field
      * Set the options from a collection of models.
      *
      * @param  \Illuminate\Database\Eloquent\Collection  $models
+     * @param  string  $resourceClass
      * @return void
      */
-    public function setOptionsFromModels(Collection $models)
+    public function setOptionsFromModels(Collection $models, $resourceClass)
     {
-        $options = $models->mapInto($this->resourceClass)->mapWithKeys(function ($associatedResource) {
+        $options = $models->mapInto($resourceClass)->mapWithKeys(function ($associatedResource) {
             return [$associatedResource->getKey() => $associatedResource->title()];
         });
         $this->options($options);
